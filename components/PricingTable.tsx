@@ -16,17 +16,23 @@ export default function PricingTable({ models }: { models: ModelPrice[] }) {
   const [provider, setProvider] = useState(PROVIDERS_ALL);
   const [sortKey, setSortKey] = useState<SortKey>("promptPrice");
   const [sortAsc, setSortAsc] = useState(true);
-  const [freeOnly, setFreeOnly] = useState(false);
+  const [priceFilter, setPriceFilter] = useState<"all" | "free" | "paid">("all");
   const [show3D, setShow3D] = useState(false);
   const [compareIds, setCompareIds] = useState<string[]>([]);
   const [pickerProvider, setPickerProvider] = useState(PROVIDERS_ALL);
   const [pickerModelId, setPickerModelId] = useState("");
+  const [pickerPriceFilter, setPickerPriceFilter] = useState<"all" | "free" | "paid">("all");
 
   const compareModels = useMemo(() => compareIds.map(id => models.find(m => m.id === id)!).filter(Boolean), [compareIds, models]);
 
   const pickerModels = useMemo(() =>
-    pickerProvider === PROVIDERS_ALL ? models : models.filter(m => m.provider === pickerProvider),
-    [models, pickerProvider]
+    models.filter(m => {
+      if (pickerProvider !== PROVIDERS_ALL && m.provider !== pickerProvider) return false;
+      if (pickerPriceFilter === "free" && m.promptPrice !== 0) return false;
+      if (pickerPriceFilter === "paid" && m.promptPrice === 0) return false;
+      return true;
+    }),
+    [models, pickerProvider, pickerPriceFilter]
   );
 
   function toggleCompare(id: string) {
@@ -44,13 +50,24 @@ export default function PricingTable({ models }: { models: ModelPrice[] }) {
     return [PROVIDERS_ALL, ...Array.from(set).sort()];
   }, [models]);
 
+  const pickerProviders = useMemo(() => {
+    const filtered = models.filter(m => {
+      if (pickerPriceFilter === "free") return m.promptPrice === 0;
+      if (pickerPriceFilter === "paid") return m.promptPrice !== 0;
+      return true;
+    });
+    const set = new Set(filtered.map(m => m.provider));
+    return [PROVIDERS_ALL, ...Array.from(set).sort()];
+  }, [models, pickerPriceFilter]);
+
   const filtered = useMemo(() => {
     return models
       .filter((m) => {
         if (search && !m.name.toLowerCase().includes(search.toLowerCase()) &&
             !m.id.toLowerCase().includes(search.toLowerCase())) return false;
         if (provider !== PROVIDERS_ALL && m.provider !== provider) return false;
-        if (freeOnly && m.promptPrice !== 0) return false;
+        if (priceFilter === "free" && m.promptPrice !== 0) return false;
+        if (priceFilter === "paid" && m.promptPrice === 0) return false;
         return true;
       })
       .sort((a, b) => {
@@ -59,7 +76,7 @@ export default function PricingTable({ models }: { models: ModelPrice[] }) {
         if (typeof av === "string") return sortAsc ? av.localeCompare(bv as string) : (bv as string).localeCompare(av);
         return sortAsc ? (av as number) - (bv as number) : (bv as number) - (av as number);
       });
-  }, [models, search, provider, sortKey, sortAsc, freeOnly]);
+  }, [models, search, provider, sortKey, sortAsc, priceFilter]);
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortAsc((v) => !v);
@@ -115,11 +132,25 @@ export default function PricingTable({ models }: { models: ModelPrice[] }) {
           {providers.map((p) => <option key={p}>{p}</option>)}
         </select>
 
-        <button style={btnStyle(freeOnly)} onClick={() => setFreeOnly((v) => !v)}>
-          Free only
-        </button>
+        <select
+          value={priceFilter}
+          onChange={(e) => setPriceFilter(e.target.value as "all" | "free" | "paid")}
+          style={{
+            padding: "6px 12px",
+            borderRadius: 8,
+            border: "1px solid var(--border)",
+            background: "var(--surface)",
+            color: "var(--text)",
+            fontSize: 12,
+            cursor: "pointer",
+          }}
+        >
+          <option value="all">All models</option>
+          <option value="free">Free only</option>
+          <option value="paid">Paid only</option>
+        </select>
         <button style={btnStyle(show3D)} onClick={() => setShow3D((v) => !v)}>
-          3D Chart
+          Chart
         </button>
       </div>
 
@@ -134,6 +165,22 @@ export default function PricingTable({ models }: { models: ModelPrice[] }) {
           + Add to Compare:
         </span>
 
+        {/* Price filter */}
+        <select
+          value={pickerPriceFilter}
+          onChange={e => { setPickerPriceFilter(e.target.value as "all" | "free" | "paid"); setPickerProvider(PROVIDERS_ALL); setPickerModelId(""); }}
+          style={{
+            padding: "6px 10px", borderRadius: 7,
+            border: "1px solid var(--border)",
+            background: "var(--surface)", color: "var(--text)",
+            fontSize: 12, cursor: "pointer",
+          }}
+        >
+          <option value="all">All</option>
+          <option value="free">Free</option>
+          <option value="paid">Paid</option>
+        </select>
+
         {/* Provider / Family */}
         <select
           value={pickerProvider}
@@ -145,7 +192,7 @@ export default function PricingTable({ models }: { models: ModelPrice[] }) {
             fontSize: 12, cursor: "pointer",
           }}
         >
-          {providers.map(p => <option key={p} value={p}>{p}</option>)}
+          {pickerProviders.map(p => <option key={p} value={p}>{p}</option>)}
         </select>
 
         {/* Model name */}

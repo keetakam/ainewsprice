@@ -3,7 +3,7 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from "react";
 import type { ModelPrice } from "@/lib/prices";
 
-// ─── Config ──────────────────────────────────────────────────────────────────
+// ─── Config ───────────────────────────────────────────────────────────────────
 
 const PROVIDER_COLORS = [
   "#6366f1", "#f59e0b", "#10b981", "#ef4444", "#8b5cf6",
@@ -13,13 +13,14 @@ const PROVIDER_COLORS = [
 
 type MetricKey = "promptPrice" | "completionPrice" | "contextLength";
 
-const METRICS: Record<MetricKey, { label: string; color: string; fmt: (v: number) => string }> = {
-  promptPrice:     { label: "Input Price",     color: "#ef4444", fmt: (v) => v < 0.01 ? `$${v.toFixed(5)}` : `$${v.toFixed(3)}` },
-  completionPrice: { label: "Output Price",    color: "#10b981", fmt: (v) => v < 0.01 ? `$${v.toFixed(5)}` : `$${v.toFixed(3)}` },
-  contextLength:   { label: "Context Window",  color: "#6366f1", fmt: (v) => v >= 1e6 ? `${(v/1e6).toFixed(1)}M` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : `${v}` },
+const METRICS: Record<MetricKey, { label: string; fmt: (v: number) => string }> = {
+  promptPrice:     { label: "Input Price ($/1M tok)",  fmt: (v) => v < 0.01 ? `$${v.toFixed(5)}` : `$${v.toFixed(3)}` },
+  completionPrice: { label: "Output Price ($/1M tok)", fmt: (v) => v < 0.01 ? `$${v.toFixed(5)}` : `$${v.toFixed(3)}` },
+  contextLength:   { label: "Context Window",          fmt: (v) => v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}K` : `${v}` },
 };
 
-const AXIS_COLORS = { x: "#ef4444", y: "#10b981", z: "#6366f1" };
+const METRIC_KEYS = Object.keys(METRICS) as MetricKey[];
+const PAD = { top: 24, right: 24, bottom: 56, left: 72 };
 
 // ─── Math ─────────────────────────────────────────────────────────────────────
 
@@ -29,216 +30,294 @@ function logNorm(val: number, min: number, max: number): number {
   return Math.max(0, Math.min(1, (lv - lMin) / (lMax - lMin)));
 }
 
-function project(x: number, y: number, z: number, rotX: number, rotY: number, W: number, H: number): [number, number, number] {
-  const cx = x - 0.5, cy = y - 0.5, cz = z - 0.5;
-  const cosY = Math.cos(rotY), sinY = Math.sin(rotY);
-  const rx = cx * cosY - cz * sinY;
-  const rz1 = cx * sinY + cz * cosY;
-  const cosX = Math.cos(rotX), sinX = Math.sin(rotX);
-  const ry = cy * cosX - rz1 * sinX;
-  const rz2 = cy * sinX + rz1 * cosX;
-  const fov = 2.8, d = rz2 + fov, s = fov / d;
-  const pad = 0.18, pw = W * (1 - pad * 2), ph = H * (1 - pad * 2);
-  return [(rx * s + 0.5) * pw + W * pad, (-ry * s + 0.5) * ph + H * pad, rz2];
+function normToData(norm: number, min: number, max: number): number {
+  return min * Math.pow(max / min, norm);
 }
+
+function logTicks(min: number, max: number, count = 5): number[] {
+  if (min <= 0 || max <= min) return [];
+  const ticks: number[] = [];
+  for (let i = 0; i <= count; i++) ticks.push(normToData(i / count, min, max));
+  return ticks;
+}
+
+// free (=0) → plot at -0.08 so it shows just outside the axis origin
+function normVal(val: number, min: number, max: number): number {
+  if (val <= 0) return -0.08;
+  return logNorm(val, min, max);
+}
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface View { x0: number; x1: number; y0: number; y1: number }
+const DEFAULT_VIEW: View = { x0: 0, x1: 1, y0: 0, y1: 1 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function PricingChart3D({ models }: { models: ModelPrice[] }) {
+export default function PricingChart({ models }: { models: ModelPrice[] }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [rotX, setRotX] = useState(0.5);
-  const [rotY, setRotY] = useState(0.7);
+  const [axisX, setAxisX] = useState<MetricKey>("promptPrice");
+  const [axisY, setAxisY] = useState<MetricKey>("completionPrice");
+  const [view, setView] = useState<View>(DEFAULT_VIEW);
   const [tooltip, setTooltip] = useState<{ cx: number; cy: number; model: ModelPrice } | null>(null);
-  const dragRef = useRef<{ sx: number; sy: number; rx: number; ry: number } | null>(null);
+  const dragRef = useRef<{ sx: number; sy: number; vx0: number; vx1: number; vy0: number; vy1: number } | null>(null);
+  const viewRef = useRef(view);
+  viewRef.current = view;
 
-  const axisX: MetricKey = "promptPrice";
-  const axisY: MetricKey = "completionPrice";
-  const axisZ: MetricKey = "contextLength";
+  // Reset view when axes change
+  useEffect(() => { setView(DEFAULT_VIEW); }, [axisX, axisY]);
 
-  const visible = useMemo(() =>
-    models.filter(m => m.promptPrice > 0 && m.completionPrice > 0 && m.contextLength > 0),
-    [models]
-  );
+  const visible = useMemo(() => models.filter(m => m.contextLength > 0), [models]);
 
-  const providers = useMemo(() => Array.from(new Set(visible.map(m => m.provider))).sort(), [visible]);
-  const colorMap = useMemo(() =>
-    new Map(providers.map((p, i) => [p, PROVIDER_COLORS[i % PROVIDER_COLORS.length]])),
-    [providers]
-  );
-
-  // Compute ranges per metric
-  const metricRange = useMemo(() => {
-    const get = (key: MetricKey) => {
-      const vals = visible.map(m => m[key] as number).filter(v => v > 0);
-      return { min: Math.min(...vals), max: Math.max(...vals) };
-    };
-    return { promptPrice: get("promptPrice"), completionPrice: get("completionPrice"), contextLength: get("contextLength") };
+  const colorMap = useMemo(() => {
+    const providers = Array.from(new Set(visible.map(m => m.provider))).sort();
+    return new Map(providers.map((p, i) => [p, PROVIDER_COLORS[i % PROVIDER_COLORS.length]]));
   }, [visible]);
 
+  // range based on non-zero values only (log scale)
+  const rangeX = useMemo(() => {
+    const vals = visible.map(m => m[axisX] as number).filter(v => v > 0);
+    if (vals.length === 0) return { min: 1, max: 10 };
+    return { min: Math.min(...vals), max: Math.max(...vals) };
+  }, [visible, axisX]);
+
+  const rangeY = useMemo(() => {
+    const vals = visible.map(m => m[axisY] as number).filter(v => v > 0);
+    if (vals.length === 0) return { min: 1, max: 10 };
+    return { min: Math.min(...vals), max: Math.max(...vals) };
+  }, [visible, axisY]);
+
   const points = useMemo(() => visible.map(m => ({
-    nx: logNorm(m[axisX] as number, metricRange[axisX].min, metricRange[axisX].max),
-    ny: logNorm(m[axisY] as number, metricRange[axisY].min, metricRange[axisY].max),
-    nz: logNorm(m[axisZ] as number, metricRange[axisZ].min, metricRange[axisZ].max),
+    nx: normVal(m[axisX] as number, rangeX.min, rangeX.max),
+    ny: normVal(m[axisY] as number, rangeY.min, rangeY.max),
     model: m,
     color: colorMap.get(m.provider) ?? "#6366f1",
-  })), [visible, axisX, axisY, axisZ, metricRange, colorMap]);
+  })), [visible, axisX, axisY, rangeX, rangeY, colorMap]);
 
-  const draw = useCallback((rx: number, ry: number) => {
+  // Convert normalized data coord → canvas pixel
+  const toCanvas = useCallback((nx: number, ny: number, W: number, H: number, v: View): [number, number] => {
+    const cw = W - PAD.left - PAD.right;
+    const ch = H - PAD.top - PAD.bottom;
+    return [
+      PAD.left + (nx - v.x0) / (v.x1 - v.x0) * cw,
+      PAD.top + (1 - (ny - v.y0) / (v.y1 - v.y0)) * ch,
+    ];
+  }, []);
+
+  // Convert canvas pixel → normalized data coord
+  const fromCanvas = useCallback((mx: number, my: number, W: number, H: number, v: View): [number, number] => {
+    const cw = W - PAD.left - PAD.right;
+    const ch = H - PAD.top - PAD.bottom;
+    return [
+      v.x0 + (mx - PAD.left) / cw * (v.x1 - v.x0),
+      v.y0 + (1 - (my - PAD.top) / ch) * (v.y1 - v.y0),
+    ];
+  }, []);
+
+  const draw = useCallback((v: View) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     const W = canvas.width, H = canvas.height;
+    const cw = W - PAD.left - PAD.right;
+    const ch = H - PAD.top - PAD.bottom;
 
-    // Solid background
     ctx.fillStyle = "#0d0d18";
     ctx.fillRect(0, 0, W, H);
 
-    // Floor grid
-    ctx.strokeStyle = "rgba(255,255,255,0.07)";
-    ctx.lineWidth = 1;
-    for (let i = 0; i <= 5; i++) {
-      const t = i / 5;
-      const [x1,y1] = project(0,0,t, rx,ry,W,H); const [x2,y2] = project(1,0,t, rx,ry,W,H);
-      ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
-      const [x3,y3] = project(t,0,0, rx,ry,W,H); const [x4,y4] = project(t,0,1, rx,ry,W,H);
-      ctx.beginPath(); ctx.moveTo(x3,y3); ctx.lineTo(x4,y4); ctx.stroke();
+    // Clip to chart area
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(PAD.left, PAD.top, cw, ch);
+    ctx.clip();
+
+    // Grid + X ticks
+    if (rangeX.min > 0 && rangeX.max > rangeX.min) {
+      const vMinX = Math.max(1e-12, normToData(v.x0, rangeX.min, rangeX.max));
+      const vMaxX = normToData(v.x1, rangeX.min, rangeX.max);
+      logTicks(vMinX, vMaxX, 5).forEach(val => {
+        const nx = logNorm(val, rangeX.min, rangeX.max);
+        const [cx] = toCanvas(nx, 0, W, H, v);
+        ctx.strokeStyle = "rgba(255,255,255,0.07)";
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(cx, PAD.top); ctx.lineTo(cx, PAD.top + ch); ctx.stroke();
+      });
     }
 
-    // Origin marker
-    const [ox,oy] = project(0,0,0, rx,ry,W,H);
-    ctx.beginPath(); ctx.arc(ox,oy,5,0,Math.PI*2);
-    ctx.fillStyle = "#ffffff88"; ctx.fill();
-
-    // Axes
-    const axisList = [
-      { color: AXIS_COLORS.x, label: `X: ${METRICS[axisX].label}`, ex:1, ey:0, ez:0 },
-      { color: AXIS_COLORS.y, label: `Y: ${METRICS[axisY].label}`, ex:0, ey:1, ez:0 },
-      { color: AXIS_COLORS.z, label: `Z: ${METRICS[axisZ].label}`, ex:0, ey:0, ez:1 },
-    ];
-    for (const ax of axisList) {
-      const [px1,py1] = project(0,0,0, rx,ry,W,H);
-      const [px2,py2] = project(ax.ex,ax.ey,ax.ez, rx,ry,W,H);
-
-      // Glow pass
-      ctx.save();
-      ctx.shadowColor = ax.color;
-      ctx.shadowBlur = 10;
-      ctx.beginPath(); ctx.moveTo(px1,py1); ctx.lineTo(px2,py2);
-      ctx.strokeStyle = ax.color; ctx.lineWidth = 4; ctx.stroke();
-      ctx.restore();
-
-      // Arrowhead
-      const angle = Math.atan2(py2-py1, px2-px1);
-      ctx.beginPath();
-      ctx.moveTo(px2,py2);
-      ctx.lineTo(px2-14*Math.cos(angle-0.35), py2-14*Math.sin(angle-0.35));
-      ctx.lineTo(px2-14*Math.cos(angle+0.35), py2-14*Math.sin(angle+0.35));
-      ctx.closePath(); ctx.fillStyle = ax.color; ctx.fill();
-
-      // Label with opaque background
-      ctx.font = "bold 13px system-ui,sans-serif";
-      const tw = ctx.measureText(ax.label).width;
-      const lx = px2 + 10, ly = py2 + 5;
-      ctx.fillStyle = "rgba(13,13,24,0.85)";
-      ctx.fillRect(lx - 3, ly - 14, tw + 8, 18);
-      ctx.fillStyle = ax.color;
-      ctx.fillText(ax.label, lx + 1, ly);
+    // Grid + Y ticks
+    if (rangeY.min > 0 && rangeY.max > rangeY.min) {
+      const vMinY = Math.max(1e-12, normToData(v.y0, rangeY.min, rangeY.max));
+      const vMaxY = normToData(v.y1, rangeY.min, rangeY.max);
+      logTicks(vMinY, vMaxY, 5).forEach(val => {
+        const ny = logNorm(val, rangeY.min, rangeY.max);
+        const [, cy] = toCanvas(0, ny, W, H, v);
+        ctx.strokeStyle = "rgba(255,255,255,0.07)";
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(PAD.left, cy); ctx.lineTo(PAD.left + cw, cy); ctx.stroke();
+      });
     }
 
-    // Tick labels
-    const drawTicks = (axis: "x"|"y"|"z", metricKey: MetricKey) => {
-      const r = metricRange[metricKey];
-      if (!r || r.min <= 0 || r.max <= 0 || r.min >= r.max) return;
-      for (let i = 1; i <= 4; i++) {
-        const t = i / 4;
-        const [px,py] = axis === "x" ? project(t,0,0, rx,ry,W,H)
-                       : axis === "y" ? project(0,t,0, rx,ry,W,H)
-                       : project(0,0,t, rx,ry,W,H);
-        const val = r.min * Math.pow(r.max / r.min, t);
-        const txt = METRICS[metricKey].fmt(val);
+    // Points
+    if (points.length > 0) {
+      for (const p of points) {
+        const [px, py] = toCanvas(p.nx, p.ny, W, H, v);
+        ctx.beginPath();
+        ctx.arc(px, py, 7, 0, Math.PI * 2);
+        ctx.fillStyle = p.color + "cc";
+        ctx.fill();
+        ctx.strokeStyle = p.color;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        const label = p.model.name.length > 22 ? p.model.name.slice(0, 20) + "…" : p.model.name;
         ctx.font = "10px system-ui,sans-serif";
-        const tw = ctx.measureText(txt).width;
-        ctx.fillStyle = "rgba(13,13,24,0.7)";
-        ctx.fillRect(px+2, py-11, tw+4, 13);
-        ctx.fillStyle = AXIS_COLORS[axis] + "cc";
-        ctx.fillText(txt, px+4, py);
+        ctx.textAlign = "left";
+        const lw = ctx.measureText(label).width;
+        ctx.fillStyle = "rgba(13,13,24,0.8)";
+        ctx.fillRect(px + 10, py - 10, lw + 6, 14);
+        ctx.fillStyle = p.color;
+        ctx.fillText(label, px + 13, py + 1);
       }
-    };
-    drawTicks("x", axisX);
-    drawTicks("y", axisY);
-    drawTicks("z", axisZ);
+    }
+
+    ctx.restore(); // end clip
+
+    // Axes border
+    ctx.strokeStyle = "rgba(255,255,255,0.25)";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(PAD.left, PAD.top);
+    ctx.lineTo(PAD.left, PAD.top + ch);
+    ctx.lineTo(PAD.left + cw, PAD.top + ch);
+    ctx.stroke();
+
+    // Tick labels X (outside clip)
+    if (rangeX.min > 0 && rangeX.max > rangeX.min) {
+      const vMinX = Math.max(1e-12, normToData(v.x0, rangeX.min, rangeX.max));
+      const vMaxX = normToData(v.x1, rangeX.min, rangeX.max);
+      logTicks(vMinX, vMaxX, 5).forEach(val => {
+        const nx = logNorm(val, rangeX.min, rangeX.max);
+        const [cx] = toCanvas(nx, 0, W, H, v);
+        if (cx < PAD.left || cx > PAD.left + cw) return;
+        ctx.font = "10px system-ui,sans-serif";
+        ctx.fillStyle = "#ffffff55";
+        ctx.textAlign = "center";
+        ctx.fillText(METRICS[axisX].fmt(val), cx, PAD.top + ch + 16);
+      });
+    }
+
+    // Tick labels Y (outside clip)
+    if (rangeY.min > 0 && rangeY.max > rangeY.min) {
+      const vMinY = Math.max(1e-12, normToData(v.y0, rangeY.min, rangeY.max));
+      const vMaxY = normToData(v.y1, rangeY.min, rangeY.max);
+      logTicks(vMinY, vMaxY, 5).forEach(val => {
+        const ny = logNorm(val, rangeY.min, rangeY.max);
+        const [, cy] = toCanvas(0, ny, W, H, v);
+        if (cy < PAD.top || cy > PAD.top + ch) return;
+        ctx.font = "10px system-ui,sans-serif";
+        ctx.fillStyle = "#ffffff55";
+        ctx.textAlign = "right";
+        ctx.fillText(METRICS[axisY].fmt(val), PAD.left - 6, cy + 4);
+      });
+    }
+
+    // Axis labels
+    ctx.font = "bold 11px system-ui,sans-serif";
+    ctx.fillStyle = "#ffffff88";
+    ctx.textAlign = "center";
+    ctx.fillText(METRICS[axisX].label, PAD.left + cw / 2, H - 8);
+    ctx.save();
+    ctx.translate(14, PAD.top + ch / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText(METRICS[axisY].label, 0, 0);
+    ctx.restore();
 
     // Empty state
     if (points.length === 0) {
-      ctx.font = "bold 15px system-ui,sans-serif";
+      ctx.font = "bold 14px system-ui,sans-serif";
       ctx.fillStyle = "#ffffff33";
-      const msg = "กด  + Add to Compare  เพื่อเพิ่ม model ในกราฟ";
-      const tw = ctx.measureText(msg).width;
-      ctx.fillText(msg, (W - tw) / 2, H / 2);
-      ctx.font = "12px system-ui,sans-serif";
-      ctx.fillStyle = "#ffffff1a";
-      const sub = "เลือก model แล้วกด Add ด้านบน";
-      const sw = ctx.measureText(sub).width;
-      ctx.fillText(sub, (W - sw) / 2, H / 2 + 26);
-      return;
+      ctx.textAlign = "center";
+      ctx.fillText("กด  + Add to Compare  เพื่อเพิ่ม model ในกราฟ", W / 2, H / 2);
     }
+  }, [points, axisX, axisY, rangeX, rangeY, toCanvas]);
 
-    // Points (painter's algorithm)
-    const projected = points.map(p => {
-      const [px,py,pz] = project(p.nx,p.ny,p.nz, rx,ry,W,H);
-      return { ...p, px, py, pz };
-    }).sort((a,b) => b.pz - a.pz);
+  useEffect(() => { draw(view); }, [view, draw]);
 
-    for (const p of projected) {
-      // Dot (larger since few points)
-      ctx.beginPath(); ctx.arc(p.px, p.py, 8, 0, Math.PI*2);
-      ctx.fillStyle = p.color+"dd"; ctx.fill();
-      ctx.strokeStyle = p.color; ctx.lineWidth = 2; ctx.stroke();
-
-      // Model name label
-      const label = p.model.name.length > 24 ? p.model.name.slice(0, 22) + "…" : p.model.name;
-      ctx.font = "bold 11px system-ui,sans-serif";
-      const lw = ctx.measureText(label).width;
-      ctx.fillStyle = "rgba(13,13,24,0.82)";
-      ctx.fillRect(p.px + 11, p.py - 10, lw + 8, 16);
-      ctx.fillStyle = p.color;
-      ctx.fillText(label, p.px + 15, p.py + 2);
-    }
-  }, [points, axisX, axisY, axisZ, metricRange]);
-
-  useEffect(() => { draw(rotX, rotY); }, [rotX, rotY, draw]);
-
-  const getProjected = useCallback((rx: number, ry: number) => {
+  // Non-passive wheel handler (must be attached via useEffect)
+  useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return [];
-    const W = canvas.width, H = canvas.height;
-    return points.map(p => {
-      const [px,py,pz] = project(p.nx,p.ny,p.nz, rx,ry,W,H);
-      return { ...p, px, py, pz };
-    });
-  }, [points]);
+    if (!canvas) return;
+
+    function onWheel(e: WheelEvent) {
+      e.preventDefault();
+      const rect = canvas!.getBoundingClientRect();
+      const scaleX = canvas!.width / rect.width;
+      const scaleY = canvas!.height / rect.height;
+      const mx = (e.clientX - rect.left) * scaleX;
+      const my = (e.clientY - rect.top) * scaleY;
+      const v = viewRef.current;
+      const [nx, ny] = [
+        v.x0 + (mx - PAD.left) / (canvas!.width - PAD.left - PAD.right) * (v.x1 - v.x0),
+        v.y0 + (1 - (my - PAD.top) / (canvas!.height - PAD.top - PAD.bottom)) * (v.y1 - v.y0),
+      ];
+      const factor = e.deltaY > 0 ? 1.25 : 1 / 1.25;
+      setView({
+        x0: nx - (nx - v.x0) * factor,
+        x1: nx + (v.x1 - nx) * factor,
+        y0: ny - (ny - v.y0) * factor,
+        y1: ny + (v.y1 - ny) * factor,
+      });
+    }
+
+    canvas.addEventListener("wheel", onWheel, { passive: false });
+    return () => canvas.removeEventListener("wheel", onWheel);
+  }, []);
 
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    dragRef.current = { sx: e.clientX, sy: e.clientY, rx: rotX, ry: rotY };
+    dragRef.current = {
+      sx: e.clientX, sy: e.clientY,
+      vx0: view.x0, vx1: view.x1, vy0: view.y0, vy1: view.y1,
+    };
   };
+
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
     if (dragRef.current) {
-      setRotY(dragRef.current.ry + (e.clientX - dragRef.current.sx) * 0.008);
-      setRotX(dragRef.current.rx + (e.clientY - dragRef.current.sy) * 0.008);
+      const d = dragRef.current;
+      const W = canvas.width, H = canvas.height;
+      const cw = W - PAD.left - PAD.right;
+      const ch = H - PAD.top - PAD.bottom;
+      const dx = (e.clientX - d.sx) * scaleX / cw * (d.vx1 - d.vx0);
+      const dy = (e.clientY - d.sy) * scaleY / ch * (d.vy1 - d.vy0);
+      setView({ x0: d.vx0 - dx, x1: d.vx1 - dx, y0: d.vy0 + dy, y1: d.vy1 + dy });
       setTooltip(null);
       return;
     }
-    const rect = canvas.getBoundingClientRect();
-    const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
-    const my = (e.clientY - rect.top) * (canvas.height / rect.height);
-    const hit = getProjected(rotX, rotY).find(p => Math.hypot(p.px - mx, p.py - my) < 9);
+
+    const mx = (e.clientX - rect.left) * scaleX;
+    const my = (e.clientY - rect.top) * scaleY;
+    const W = canvas.width, H = canvas.height;
+    const hit = points.find(p => {
+      const [px, py] = toCanvas(p.nx, p.ny, W, H, viewRef.current);
+      return Math.hypot(px - mx, py - my) < 10;
+    });
     setTooltip(hit ? { cx: e.clientX - rect.left, cy: e.clientY - rect.top, model: hit.model } : null);
   };
+
   const handleMouseUp = () => { dragRef.current = null; };
 
+  const selStyle: React.CSSProperties = {
+    padding: "5px 10px", borderRadius: 7,
+    border: "1px solid var(--border)",
+    background: "var(--surface)", color: "var(--text)",
+    fontSize: 12, cursor: "pointer",
+  };
   const btnStyle: React.CSSProperties = {
     padding: "5px 10px", borderRadius: 7,
     border: "1px solid var(--border)",
@@ -248,13 +327,25 @@ export default function PricingChart3D({ models }: { models: ModelPrice[] }) {
 
   return (
     <div style={{ marginBottom: 32 }}>
-
-      <div style={{ display: "flex", gap: 10, marginBottom: 10, alignItems: "center", flexWrap: "wrap" }}>
-        <span style={{ fontSize: 11, color: "var(--muted)" }}>
-          Drag to rotate · {visible.length} models
+      {/* Controls */}
+      <div style={{ display: "flex", gap: 12, marginBottom: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <span style={{ fontSize: 12, color: "var(--muted)" }}>
+          {visible.length} models · scroll to zoom · drag to pan
         </span>
-        <button onClick={() => { setRotX(0.5); setRotY(0.7); }} style={btnStyle}>
-          Reset view
+        <label style={{ fontSize: 12, color: "var(--muted)", display: "flex", gap: 6, alignItems: "center" }}>
+          X:
+          <select value={axisX} onChange={e => setAxisX(e.target.value as MetricKey)} style={selStyle}>
+            {METRIC_KEYS.map(k => <option key={k} value={k}>{METRICS[k].label}</option>)}
+          </select>
+        </label>
+        <label style={{ fontSize: 12, color: "var(--muted)", display: "flex", gap: 6, alignItems: "center" }}>
+          Y:
+          <select value={axisY} onChange={e => setAxisY(e.target.value as MetricKey)} style={selStyle}>
+            {METRIC_KEYS.map(k => <option key={k} value={k}>{METRICS[k].label}</option>)}
+          </select>
+        </label>
+        <button onClick={() => setView(DEFAULT_VIEW)} style={btnStyle}>
+          Reset zoom
         </button>
       </div>
 
@@ -262,32 +353,31 @@ export default function PricingChart3D({ models }: { models: ModelPrice[] }) {
       <div style={{ position: "relative", borderRadius: 12, overflow: "hidden", border: "1px solid var(--border)" }}>
         <canvas
           ref={canvasRef}
-          width={800} height={520}
-          style={{ width: "100%", display: "block", cursor: "grab" }}
+          width={800} height={480}
+          style={{ width: "100%", display: "block", cursor: dragRef.current ? "grabbing" : "crosshair" }}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
+          onMouseLeave={() => { handleMouseUp(); setTooltip(null); }}
         />
 
         {tooltip && (
           <div style={{
             position: "absolute",
-            left: Math.min(tooltip.cx + 14, 420), top: Math.max(tooltip.cy - 90, 8),
+            left: Math.min(tooltip.cx + 14, 420), top: Math.max(tooltip.cy - 80, 8),
             background: "var(--surface2,#1e1e2e)", border: "1px solid var(--border)",
             borderRadius: 8, padding: "10px 14px", fontSize: 12,
             pointerEvents: "none", zIndex: 10, minWidth: 190,
             boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
           }}>
-            <p style={{ fontWeight: 700, marginBottom: 6, fontSize: 13, color: "var(--text)" }}>{tooltip.model.name}</p>
-            <p style={{ color: AXIS_COLORS.x, marginBottom: 2 }}>
+            <p style={{ fontWeight: 700, marginBottom: 6, fontSize: 13, color: "var(--text)" }}>
+              {tooltip.model.name}
+            </p>
+            <p style={{ color: "#ffffff99", marginBottom: 2 }}>
               {METRICS[axisX].label}: {METRICS[axisX].fmt(tooltip.model[axisX] as number)}
             </p>
-            <p style={{ color: AXIS_COLORS.y, marginBottom: 2 }}>
+            <p style={{ color: "#ffffff99" }}>
               {METRICS[axisY].label}: {METRICS[axisY].fmt(tooltip.model[axisY] as number)}
-            </p>
-            <p style={{ color: AXIS_COLORS.z }}>
-              {METRICS[axisZ].label}: {METRICS[axisZ].fmt(tooltip.model[axisZ] as number)}
             </p>
           </div>
         )}

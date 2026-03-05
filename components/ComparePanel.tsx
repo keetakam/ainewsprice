@@ -1,5 +1,6 @@
 "use client";
 
+import React, { useState } from "react";
 import type { ModelPrice } from "@/lib/prices";
 
 function fmt(n: number) {
@@ -38,6 +39,8 @@ interface Props {
 }
 
 export default function ComparePanel({ models, onRemove, onClear }: Props) {
+  const [collapsed, setCollapsed] = useState(false);
+
   if (models.length === 0) return (
     <div style={{
       position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 100,
@@ -90,7 +93,7 @@ export default function ComparePanel({ models, onRemove, onClear }: Props) {
       padding: "14px 20px 16px",
     }}>
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: collapsed ? 0 : 8, flexWrap: "wrap" }}>
         <span style={{ fontWeight: 700, fontSize: 13 }}>Compare ({models.length}/5)</span>
 
         {/* Model name chips */}
@@ -120,6 +123,16 @@ export default function ComparePanel({ models, onRemove, onClear }: Props) {
           Green = cheapest · Purple = most context
         </span>
         <button
+          onClick={() => setCollapsed(v => !v)}
+          style={{
+            padding: "4px 12px", borderRadius: 6,
+            border: "1px solid var(--border)", background: "transparent",
+            color: "var(--muted)", fontSize: 11, cursor: "pointer",
+          }}
+        >
+          {collapsed ? "Show" : "Hide"}
+        </button>
+        <button
           onClick={onClear}
           style={{
             padding: "4px 12px", borderRadius: 6,
@@ -132,7 +145,7 @@ export default function ComparePanel({ models, onRemove, onClear }: Props) {
       </div>
 
       {/* Table */}
-      <div style={{ overflowX: "auto" }}>
+      {!collapsed && <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 480 }}>
           <thead>
             <tr>
@@ -174,7 +187,7 @@ export default function ComparePanel({ models, onRemove, onClear }: Props) {
             ))}
           </tbody>
         </table>
-      </div>
+      </div>}
     </div>
   );
 }
