@@ -36,14 +36,15 @@ interface Props {
   models: ModelPrice[];
   onRemove: (id: string) => void;
   onClear: () => void;
+  inline?: boolean;
 }
 
-export default function ComparePanel({ models, onRemove, onClear }: Props) {
+export default function ComparePanel({ models, onRemove, onClear, inline }: Props) {
   const [collapsed, setCollapsed] = useState(false);
 
   if (models.length === 0) return (
     <div style={{
-      position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 100,
+      ...(inline ? {} : { position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 100 }),
       background: "var(--surface, #0f0f17)",
       borderTop: "1px solid var(--border)",
       padding: "10px 20px",
@@ -86,10 +87,10 @@ export default function ComparePanel({ models, onRemove, onClear }: Props) {
 
   return (
     <div style={{
-      position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 100,
+      ...(inline ? { borderRadius: 12, marginTop: 24 } : { position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 100 }),
       background: "var(--surface, #0f0f17)",
       borderTop: "1px solid var(--border)",
-      boxShadow: "0 -4px 24px rgba(0,0,0,0.4)",
+      boxShadow: inline ? "none" : "0 -4px 24px rgba(0,0,0,0.4)",
       padding: "14px 20px 16px",
     }}>
       {/* Header */}

@@ -1,9 +1,9 @@
 import { fetchPrices } from "@/lib/prices";
-import ModelList from "@/components/ModelList";
+import ComparePage from "@/components/ComparePage";
 
-export const revalidate = 3600; // ISR every 1 hour
+export const revalidate = 3600;
 
-export default async function PricingPage() {
+export default async function ComparePricePage() {
   let models = [];
   try {
     models = await fetchPrices();
@@ -19,12 +19,9 @@ export default async function PricingPage() {
   return (
     <div>
       <div style={{ marginBottom: 28 }}>
-        <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 6 }}>AI Model Pricing</h1>
-        <p style={{ color: "var(--muted)" }}>
-          From OpenRouter · updated hourly
-        </p>
+        <p style={{ color: "var(--muted)" }}>From OpenRouter · updated hourly</p>
       </div>
-      <ModelList models={models} />
+      <ComparePage models={models} />
     </div>
   );
 }

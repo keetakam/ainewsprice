@@ -19,22 +19,26 @@ interface ModelCardProps {
   onAdd?: () => void;
   isAdded?: boolean;
   removeMode?: boolean;
+  onClick?: () => void;
 }
 
-export default function ModelCard({ model, onAdd, isAdded, removeMode }: ModelCardProps) {
+export default function ModelCard({ model, onAdd, isAdded, removeMode, onClick }: ModelCardProps) {
   return (
-    <div style={{
-      background: "var(--surface)",
-      border: "1px solid var(--border)",
-      borderRadius: 12,
-      padding: "16px 18px",
-      display: "flex",
-      flexDirection: "column",
-      gap: 8,
-      transition: "border-color 0.15s",
-    }}
-    onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--accent)")}
-    onMouseLeave={(e) => (e.currentTarget.style.borderColor = isAdded ? "var(--accent)" : "var(--border)")}
+    <div
+      onClick={onClick}
+      style={{
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
+        borderRadius: 12,
+        padding: "16px 18px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+        transition: "border-color 0.15s",
+        cursor: onClick ? "pointer" : "default",
+      }}
+      onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--accent)")}
+      onMouseLeave={(e) => (e.currentTarget.style.borderColor = isAdded ? "var(--accent)" : "var(--border)")}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
         <div>
@@ -45,27 +49,35 @@ export default function ModelCard({ model, onAdd, isAdded, removeMode }: ModelCa
             {model.provider}
           </p>
         </div>
-        <span style={{
-          fontSize: 11,
-          padding: "2px 8px",
-          borderRadius: 20,
-          background: "var(--surface2)",
-          color: "var(--muted)",
-          whiteSpace: "nowrap",
-        }}>
-          {fmtCtx(model.contextLength)} ctx
-        </span>
+        <div style={{ display: "flex", gap: 4, alignItems: "center", flexShrink: 0 }}>
+          {model.promptPrice === 0 && model.completionPrice === 0 && (
+            <span style={{
+              fontSize: 11, padding: "2px 8px", borderRadius: 20,
+              background: "#14532d", color: "#4ade80",
+              fontWeight: 700, whiteSpace: "nowrap",
+            }}>
+              FREE
+            </span>
+          )}
+          <span style={{
+            fontSize: 11, padding: "2px 8px", borderRadius: 20,
+            background: "var(--surface2)", color: "var(--muted)",
+            whiteSpace: "nowrap",
+          }}>
+            {fmtCtx(model.contextLength)} ctx
+          </span>
+        </div>
       </div>
 
       {model.description && (
         <p style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.5, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
-          {model.description}
+          {model.description.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1").replace(/\*\*([^*]+)\*\*/g, "$1")}
         </p>
       )}
 
       {onAdd && (
         <button
-          onClick={onAdd}
+          onClick={e => { e.stopPropagation(); onAdd(); }}
           disabled={isAdded && !removeMode}
           style={{
             alignSelf: "flex-start",
