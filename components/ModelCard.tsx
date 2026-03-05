@@ -14,7 +14,14 @@ function fmtCtx(n: number) {
   return String(n);
 }
 
-export default function ModelCard({ model }: { model: ModelPrice }) {
+interface ModelCardProps {
+  model: ModelPrice;
+  onAdd?: () => void;
+  isAdded?: boolean;
+  removeMode?: boolean;
+}
+
+export default function ModelCard({ model, onAdd, isAdded, removeMode }: ModelCardProps) {
   return (
     <div style={{
       background: "var(--surface)",
@@ -27,7 +34,7 @@ export default function ModelCard({ model }: { model: ModelPrice }) {
       transition: "border-color 0.15s",
     }}
     onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--accent)")}
-    onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
+    onMouseLeave={(e) => (e.currentTarget.style.borderColor = isAdded ? "var(--accent)" : "var(--border)")}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
         <div>
@@ -54,6 +61,26 @@ export default function ModelCard({ model }: { model: ModelPrice }) {
         <p style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.5, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
           {model.description}
         </p>
+      )}
+
+      {onAdd && (
+        <button
+          onClick={onAdd}
+          disabled={isAdded && !removeMode}
+          style={{
+            alignSelf: "flex-start",
+            padding: "3px 10px",
+            borderRadius: 6,
+            border: `1px solid ${removeMode ? "#ef4444" : isAdded ? "var(--accent)" : "var(--border)"}`,
+            background: removeMode ? "transparent" : isAdded ? "var(--accent)" : "transparent",
+            color: removeMode ? "#ef4444" : isAdded ? "#fff" : "var(--muted)",
+            fontSize: 11,
+            fontWeight: 500,
+            cursor: "pointer",
+          }}
+        >
+          {removeMode ? "− Remove" : isAdded ? "Added" : "+ Add to Compare"}
+        </button>
       )}
 
       <div style={{ display: "flex", gap: 12, marginTop: 4 }}>
