@@ -1,11 +1,17 @@
+import { fetchPerformance, lookupPerf } from "./performance";
+import type { ModelPerf } from "./performance";
+
 export interface ModelPrice {
   id: string;
   name: string;
   description: string;
   contextLength: number;
-  promptPrice: number;   // USD per 1M tokens
-  completionPrice: number; // USD per 1M tokens
+  promptPrice: number;      // USD per 1M tokens
+  completionPrice: number;  // USD per 1M tokens
   provider: string;
+  tokensPerSec: number | null;
+  timeToFirstToken: number | null;
+  intelligenceIndex: number | null;
 }
 
 interface OpenRouterModel {
@@ -20,9 +26,10 @@ interface OpenRouterModel {
 }
 
 export async function fetchPrices(): Promise<ModelPrice[]> {
-  const res = await fetch("https://openrouter.ai/api/v1/models", {
-    next: { revalidate: 3600 }, // cache 1 hour
-  });
+  const [res, perfMap] = await Promise.all([
+    fetch("https://openrouter.ai/api/v1/models", { next: { revalidate: 3600 } }),
+    fetchPerformance(),
+  ]);
 
   if (!res.ok) throw new Error(`OpenRouter API error: ${res.status}`);
 
@@ -30,15 +37,26 @@ export async function fetchPrices(): Promise<ModelPrice[]> {
   const models: OpenRouterModel[] = json.data ?? [];
 
   return models
-    .filter((m) => m.pricing?.prompt && m.pricing?.completion)
-    .map((m) => ({
-      id: m.id,
-      name: m.name,
-      description: m.description ?? "",
-      contextLength: m.context_length ?? 0,
-      promptPrice: parseFloat(m.pricing.prompt) * 1_000_000,
-      completionPrice: parseFloat(m.pricing.completion) * 1_000_000,
-      provider: m.id.split("/")[0] ?? "unknown",
-    }))
+    .filter((m) => {
+      if (!m.pricing?.prompt || !m.pricing?.completion) return false;
+      const p = parseFloat(m.pricing.prompt);
+      const c = parseFloat(m.pricing.completion);
+      return p >= 0 && c >= 0;
+    })
+    .map((m) => {
+      const perf = lookupPerf(m.id, m.name, perfMap);
+      return {
+        id: m.id,
+        name: m.name,
+        description: m.description ?? "",
+        contextLength: m.context_length ?? 0,
+        promptPrice: parseFloat(m.pricing.prompt) * 1_000_000,
+        completionPrice: parseFloat(m.pricing.completion) * 1_000_000,
+        provider: m.id.split("/")[0] ?? "unknown",
+        tokensPerSec: perf?.tokensPerSec ?? null,
+        timeToFirstToken: perf?.timeToFirstToken ?? null,
+        intelligenceIndex: perf?.intelligenceIndex ?? null,
+      };
+    })
     .sort((a, b) => a.promptPrice - b.promptPrice);
 }

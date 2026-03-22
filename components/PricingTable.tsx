@@ -28,8 +28,8 @@ export default function PricingTable({ models }: { models: ModelPrice[] }) {
   const pickerModels = useMemo(() =>
     models.filter(m => {
       if (pickerProvider !== PROVIDERS_ALL && m.provider !== pickerProvider) return false;
-      if (pickerPriceFilter === "free" && m.promptPrice !== 0) return false;
-      if (pickerPriceFilter === "paid" && m.promptPrice === 0) return false;
+      if (pickerPriceFilter === "free" && (m.promptPrice !== 0 || m.completionPrice !== 0)) return false;
+      if (pickerPriceFilter === "paid" && m.promptPrice === 0 && m.completionPrice === 0) return false;
       return true;
     }),
     [models, pickerProvider, pickerPriceFilter]
@@ -52,8 +52,8 @@ export default function PricingTable({ models }: { models: ModelPrice[] }) {
 
   const pickerProviders = useMemo(() => {
     const filtered = models.filter(m => {
-      if (pickerPriceFilter === "free") return m.promptPrice === 0;
-      if (pickerPriceFilter === "paid") return m.promptPrice !== 0;
+      if (pickerPriceFilter === "free") return m.promptPrice === 0 && m.completionPrice === 0;
+      if (pickerPriceFilter === "paid") return m.promptPrice !== 0 || m.completionPrice !== 0;
       return true;
     });
     const set = new Set(filtered.map(m => m.provider));
@@ -66,8 +66,8 @@ export default function PricingTable({ models }: { models: ModelPrice[] }) {
         if (search && !m.name.toLowerCase().includes(search.toLowerCase()) &&
             !m.id.toLowerCase().includes(search.toLowerCase())) return false;
         if (provider !== PROVIDERS_ALL && m.provider !== provider) return false;
-        if (priceFilter === "free" && m.promptPrice !== 0) return false;
-        if (priceFilter === "paid" && m.promptPrice === 0) return false;
+        if (priceFilter === "free" && (m.promptPrice !== 0 || m.completionPrice !== 0)) return false;
+        if (priceFilter === "paid" && m.promptPrice === 0 && m.completionPrice === 0) return false;
         return true;
       })
       .sort((a, b) => {

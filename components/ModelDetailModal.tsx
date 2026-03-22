@@ -94,6 +94,24 @@ export default function ModelDetailModal({ model, isAdded, onAdd, onClose }: Pro
               <p style={{ fontWeight: 700, fontSize: 16, color: green ? "var(--green)" : "var(--text)" }}>{value}</p>
             </div>
           ))}
+          {model.tokensPerSec != null && (
+            <div style={{ background: "var(--surface2)", borderRadius: 10, padding: "12px 14px" }}>
+              <p style={{ fontSize: 10, color: "var(--muted)", marginBottom: 4 }}>SPEED</p>
+              <p style={{ fontWeight: 700, fontSize: 16, color: "var(--text)" }}>{Math.round(model.tokensPerSec)} t/s</p>
+            </div>
+          )}
+          {model.timeToFirstToken != null && (
+            <div style={{ background: "var(--surface2)", borderRadius: 10, padding: "12px 14px" }}>
+              <p style={{ fontSize: 10, color: "var(--muted)", marginBottom: 4 }}>TTFT</p>
+              <p style={{ fontWeight: 700, fontSize: 16, color: "var(--text)" }}>{model.timeToFirstToken.toFixed(2)}s</p>
+            </div>
+          )}
+          {model.intelligenceIndex != null && (
+            <div style={{ background: "var(--surface2)", borderRadius: 10, padding: "12px 14px" }}>
+              <p style={{ fontSize: 10, color: "var(--muted)", marginBottom: 4 }}>INTELLIGENCE</p>
+              <p style={{ fontWeight: 700, fontSize: 16, color: "var(--text)" }}>{model.intelligenceIndex}</p>
+            </div>
+          )}
         </div>
 
         {/* Model ID */}

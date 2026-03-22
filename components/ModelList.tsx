@@ -7,7 +7,7 @@ import ModelCard from "./ModelCard";
 import ModelDetailModal from "./ModelDetailModal";
 import { useCompareIds } from "./useCompareIds";
 
-type SortKey = "promptPrice" | "completionPrice" | "contextLength" | "name";
+type SortKey = "promptPrice" | "completionPrice" | "contextLength" | "name" | "tokensPerSec";
 
 const PROVIDERS_ALL = "All";
 
@@ -43,6 +43,10 @@ export default function ModelList({ models }: { models: ModelPrice[] }) {
       .sort((a, b) => {
         const av = a[sortKey], bv = b[sortKey];
         if (typeof av === "string") return sortAsc ? av.localeCompare(bv as string) : (bv as string).localeCompare(av);
+        // null values go to end
+        if (av == null && bv == null) return 0;
+        if (av == null) return 1;
+        if (bv == null) return -1;
         return sortAsc ? (av as number) - (bv as number) : (bv as number) - (av as number);
       });
   }, [models, search, provider, sortKey, sortAsc, priceFilter]);
@@ -122,7 +126,7 @@ export default function ModelList({ models }: { models: ModelPrice[] }) {
       {/* Sort buttons */}
       <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
         <span style={{ fontSize: 12, color: "var(--muted)", alignSelf: "center" }}>Sort:</span>
-        {([["promptPrice", "Input price"], ["completionPrice", "Output price"], ["contextLength", "Context"], ["name", "Name"]] as [SortKey, string][]).map(([key, label]) => (
+        {([["promptPrice", "Input price"], ["completionPrice", "Output price"], ["contextLength", "Context"], ["tokensPerSec", "Speed"], ["name", "Name"]] as [SortKey, string][]).map(([key, label]) => (
           <button key={key} style={btnStyle(sortKey === key)} onClick={() => toggleSort(key)}>
             {label} {sortKey === key ? (sortAsc ? "↑" : "↓") : ""}
           </button>

@@ -109,6 +109,17 @@ export default function ModelCard({ model, onAdd, isAdded, removeMode, onClick }
             {fmt(model.completionPrice)}
           </p>
         </div>
+        {model.tokensPerSec != null && (
+          <>
+            <div style={{ width: 1, background: "var(--border)" }} />
+            <div>
+              <p style={{ fontSize: 10, color: "var(--muted)", marginBottom: 2 }}>SPEED</p>
+              <p style={{ fontWeight: 600, color: "var(--text)" }}>
+                {Math.round(model.tokensPerSec)} t/s
+              </p>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
