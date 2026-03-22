@@ -85,21 +85,17 @@ export default function ModelDetailModal({ model, isAdded, onAdd, onClose }: Pro
         {/* Stats grid */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 20 }}>
           {[
-            { label: "INPUT / 1M", value: fmt(model.promptPrice), green: model.promptPrice === 0 },
-            { label: "OUTPUT / 1M", value: fmt(model.completionPrice), green: model.completionPrice === 0 },
-            { label: "CONTEXT", value: fmtCtx(model.contextLength), green: false },
-          ].map(({ label, value, green }) => (
+            { label: "INPUT / 1M", value: fmt(model.promptPrice), green: model.promptPrice === 0, hint: undefined },
+            { label: "OUTPUT / 1M", value: fmt(model.completionPrice), green: model.completionPrice === 0, hint: undefined },
+            ...(model.tokensPerSec != null && model.tokensPerSec > 0 ? [{ label: "OUTPUT TOKENS / SEC", value: `${Math.round(model.tokensPerSec)} t/s`, green: false, hint: "Higher is better" }] : []),
+            { label: "CONTEXT", value: fmtCtx(model.contextLength), green: false, hint: undefined },
+          ].map(({ label, value, green, hint }: { label: string; value: string; green: boolean; hint?: string }) => (
             <div key={label} style={{ background: "var(--surface2)", borderRadius: 10, padding: "12px 14px" }}>
               <p style={{ fontSize: 10, color: "var(--muted)", marginBottom: 4 }}>{label}</p>
               <p style={{ fontWeight: 700, fontSize: 16, color: green ? "var(--green)" : "var(--text)" }}>{value}</p>
+              {hint && <p style={{ fontSize: 9, color: "var(--muted)", marginTop: 2 }}>{hint}</p>}
             </div>
           ))}
-          {model.tokensPerSec != null && (
-            <div style={{ background: "var(--surface2)", borderRadius: 10, padding: "12px 14px" }}>
-              <p style={{ fontSize: 10, color: "var(--muted)", marginBottom: 4 }}>SPEED</p>
-              <p style={{ fontWeight: 700, fontSize: 16, color: "var(--text)" }}>{Math.round(model.tokensPerSec)} t/s</p>
-            </div>
-          )}
           {model.timeToFirstToken != null && (
             <div style={{ background: "var(--surface2)", borderRadius: 10, padding: "12px 14px" }}>
               <p style={{ fontSize: 10, color: "var(--muted)", marginBottom: 4 }}>TTFT</p>

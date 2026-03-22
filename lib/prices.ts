@@ -9,6 +9,8 @@ export interface ModelPrice {
   promptPrice: number;      // USD per 1M tokens
   completionPrice: number;  // USD per 1M tokens
   provider: string;
+  modality: string;
+  createdAt: number | null; // Unix timestamp
   tokensPerSec: number | null;
   timeToFirstToken: number | null;
   intelligenceIndex: number | null;
@@ -19,9 +21,13 @@ interface OpenRouterModel {
   name: string;
   description: string;
   context_length: number;
+  created?: number;
   pricing: {
     prompt: string;
     completion: string;
+  };
+  architecture?: {
+    modality?: string;
   };
 }
 
@@ -53,6 +59,8 @@ export async function fetchPrices(): Promise<ModelPrice[]> {
         promptPrice: parseFloat(m.pricing.prompt) * 1_000_000,
         completionPrice: parseFloat(m.pricing.completion) * 1_000_000,
         provider: m.id.split("/")[0] ?? "unknown",
+        modality: m.architecture?.modality ?? "text->text",
+        createdAt: m.created ?? null,
         tokensPerSec: perf?.tokensPerSec ?? null,
         timeToFirstToken: perf?.timeToFirstToken ?? null,
         intelligenceIndex: perf?.intelligenceIndex ?? null,

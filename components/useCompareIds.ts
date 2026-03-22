@@ -8,10 +8,7 @@ export function useCompareIds() {
   const [ids, setIds] = useState<string[]>([]);
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(KEY);
-      if (stored) setIds(JSON.parse(stored));
-    } catch {}
+    localStorage.removeItem(KEY);
   }, []);
 
   function update(next: string[]) {

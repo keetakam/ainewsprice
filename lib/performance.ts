@@ -50,14 +50,24 @@ export async function fetchPerformance(): Promise<PerfMap> {
   }
 }
 
+// Creator aliases: OpenRouter → AA
+const CREATOR_ALIASES: Record<string, string[]> = {
+  "meta-llama": ["meta"],
+  "ibm-granite": ["ibm"],
+};
+
 export function lookupPerf(orId: string, orName: string, perfMap: PerfMap): ModelPerf | null {
-  // Try creator/slug from OpenRouter ID  e.g. "openai/gpt-4o"
   const slashIdx = orId.indexOf("/");
   if (slashIdx !== -1) {
     const creator = orId.slice(0, slashIdx);
-    const slug = orId.slice(slashIdx + 1).replace(/:/g, "-").replace(/\./g, "-");
-    const hit = perfMap.get(`${creator}/${slug}`);
-    if (hit) return hit;
+    const rawSlug = orId.slice(slashIdx + 1).replace(/:/g, "-").replace(/\./g, "-");
+
+    // Try all creator aliases
+    const creators = [creator, ...(CREATOR_ALIASES[creator] ?? [])];
+    for (const c of creators) {
+      const hit = perfMap.get(`${c}/${rawSlug}`);
+      if (hit) return hit;
+    }
   }
 
   // Try normalized name — strip provider prefix "Anthropic: ..."

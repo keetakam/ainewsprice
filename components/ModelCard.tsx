@@ -14,6 +14,13 @@ function fmtCtx(n: number) {
   return String(n);
 }
 
+function intelligenceRank(score: number): { label: string; bg: string; color: string } {
+  if (score >= 50) return { label: "A+", bg: "#4c1d95", color: "#c4b5fd" };
+  if (score >= 35) return { label: "A",  bg: "#1e3a5f", color: "#93c5fd" };
+  if (score >= 20) return { label: "B",  bg: "#1c3a2a", color: "#6ee7b7" };
+  return             { label: "C",  bg: "#2d2010", color: "#fcd34d" };
+}
+
 interface ModelCardProps {
   model: ModelPrice;
   onAdd?: () => void;
@@ -42,8 +49,19 @@ export default function ModelCard({ model, onAdd, isAdded, removeMode, onClick }
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
         <div>
-          <p style={{ fontWeight: 600, fontSize: 13, color: "var(--text)", lineHeight: 1.3 }}>
+          <p style={{ fontWeight: 600, fontSize: 13, color: "var(--text)", lineHeight: 1.3, display: "flex", alignItems: "center", gap: 6 }}>
             {model.name}
+            {model.intelligenceIndex != null && (() => {
+              const rank = intelligenceRank(model.intelligenceIndex);
+              return (
+                <span title={`Intelligence: ${model.intelligenceIndex}`} style={{
+                  fontSize: 10, padding: "1px 6px", borderRadius: 20,
+                  background: rank.bg, color: rank.color, fontWeight: 700,
+                }}>
+                  {rank.label}
+                </span>
+              );
+            })()}
           </p>
           <p style={{ fontSize: 11, color: "var(--accent)", marginTop: 2, textTransform: "uppercase", letterSpacing: "0.05em" }}>
             {model.provider}
@@ -59,21 +77,9 @@ export default function ModelCard({ model, onAdd, isAdded, removeMode, onClick }
               FREE
             </span>
           )}
-          <span style={{
-            fontSize: 11, padding: "2px 8px", borderRadius: 20,
-            background: "var(--surface2)", color: "var(--muted)",
-            whiteSpace: "nowrap",
-          }}>
-            {fmtCtx(model.contextLength)} ctx
-          </span>
         </div>
       </div>
 
-      {model.description && (
-        <p style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.5, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
-          {model.description.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1").replace(/\*\*([^*]+)\*\*/g, "$1")}
-        </p>
-      )}
 
       {onAdd && (
         <button
@@ -95,31 +101,37 @@ export default function ModelCard({ model, onAdd, isAdded, removeMode, onClick }
         </button>
       )}
 
-      <div style={{ display: "flex", gap: 12, marginTop: 4 }}>
+      <div style={{ display: "flex", gap: 12, marginTop: 4, alignItems: "center" }}>
         <div>
           <p style={{ fontSize: 10, color: "var(--muted)", marginBottom: 2 }}>INPUT / 1M</p>
           <p style={{ fontWeight: 600, color: model.promptPrice === 0 ? "var(--green)" : "var(--text)" }}>
             {fmt(model.promptPrice)}
           </p>
         </div>
-        <div style={{ width: 1, background: "var(--border)" }} />
+        <div style={{ width: 1, background: "var(--border)", alignSelf: "stretch" }} />
         <div>
           <p style={{ fontSize: 10, color: "var(--muted)", marginBottom: 2 }}>OUTPUT / 1M</p>
           <p style={{ fontWeight: 600, color: model.completionPrice === 0 ? "var(--green)" : "var(--text)" }}>
             {fmt(model.completionPrice)}
           </p>
         </div>
-        {model.tokensPerSec != null && (
-          <>
-            <div style={{ width: 1, background: "var(--border)" }} />
-            <div>
-              <p style={{ fontSize: 10, color: "var(--muted)", marginBottom: 2 }}>SPEED</p>
-              <p style={{ fontWeight: 600, color: "var(--text)" }}>
-                {Math.round(model.tokensPerSec)} t/s
-              </p>
-            </div>
-          </>
-        )}
+        <div style={{ marginLeft: "auto" }}>
+          {model.createdAt && (() => {
+            const d = new Date(model.createdAt * 1000);
+            const now = new Date();
+            const isNew = d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+            return (
+              <span style={{
+                fontSize: 11, padding: "2px 8px", borderRadius: 20,
+                background: isNew ? "#7c2d12" : "var(--surface2)",
+                color: isNew ? "#fb923c" : "var(--muted)",
+                fontWeight: isNew ? 700 : 400, whiteSpace: "nowrap",
+              }}>
+                {isNew ? "NEW" : d.toLocaleDateString("en-GB", { month: "short", year: "numeric" })}
+              </span>
+            );
+          })()}
+        </div>
       </div>
     </div>
   );
