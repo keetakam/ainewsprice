@@ -1,23 +1,31 @@
-import { fetchPerformance, lookupPerf } from "@/lib/performance";
-
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const map = await fetchPerformance();
+  const key = process.env.ARTIFICIAL_ANALYSIS_API_KEY;
 
-  const testIds = [
-    { id: "openai/o3", name: "OpenAI: o3" },
-    { id: "anthropic/claude-opus-4.6", name: "Anthropic: Claude Opus 4.6" },
-    { id: "google/gemini-2.5-pro", name: "Google: Gemini 2.5 Pro" },
-    { id: "meta-llama/llama-4-maverick", name: "Meta: Llama 4 Maverick" },
-    { id: "meta-llama/llama-3.3-70b-instruct", name: "Meta: Llama 3.3 70B Instruct" },
-    { id: "meta-llama/llama-4-scout", name: "Meta: Llama 4 Scout" },
-  ];
+  if (!key) {
+    return Response.json({ error: "No API key found in env" });
+  }
 
-  const results = testIds.map(({ id, name }) => ({
-    id,
-    perf: lookupPerf(id, name, map),
-  }));
+  try {
+    const res = await fetch("https://artificialanalysis.ai/api/v2/data/llms/models", {
+      headers: { "x-api-key": key },
+    });
 
-  return Response.json({ mapSize: map.size, results });
+    const text = await res.text();
+    let json: any;
+    try { json = JSON.parse(text); } catch { json = null; }
+
+    return Response.json({
+      keyPresent: true,
+      keyPrefix: key.slice(0, 8) + "...",
+      status: res.status,
+      ok: res.ok,
+      firstModel: json?.data?.[0] ?? null,
+      totalModels: json?.data?.length ?? 0,
+      rawIfError: res.ok ? undefined : text.slice(0, 500),
+    });
+  } catch (e: any) {
+    return Response.json({ error: e.message });
+  }
 }
