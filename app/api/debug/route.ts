@@ -10,6 +10,7 @@ export async function GET() {
   try {
     const res = await fetch("https://artificialanalysis.ai/api/v2/data/llms/models", {
       headers: { "x-api-key": key },
+      next: { revalidate: 86400 },
     });
 
     const text = await res.text();

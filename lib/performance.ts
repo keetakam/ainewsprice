@@ -17,7 +17,7 @@ export async function fetchPerformance(): Promise<PerfMap> {
   try {
     const res = await fetch("https://artificialanalysis.ai/api/v2/data/llms/models", {
       headers: { "x-api-key": key },
-      next: { revalidate: 3600 },
+      next: { revalidate: 86400 },
     });
     if (!res.ok) return new Map();
 
