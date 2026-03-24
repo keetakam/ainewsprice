@@ -12,6 +12,13 @@ function fmtCtx(n: number) {
   if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
   return String(n);
 }
+function fmtDate(ts: number | null) {
+  if (!ts) return null;
+  return new Date(ts * 1000).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+}
+function fmtModality(m: string) {
+  return m.replace("->", " → ");
+}
 
 interface Props {
   model: ModelPrice;
@@ -52,9 +59,20 @@ export default function ModelDetailModal({ model, isAdded, onAdd, onClose }: Pro
             <h2 style={{ fontSize: 18, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>
               {model.name}
             </h2>
-            <p style={{ fontSize: 12, color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-              {model.provider}
-            </p>
+            <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 4, flexWrap: "wrap" }}>
+              <p style={{ fontSize: 12, color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                {model.provider}
+              </p>
+              <span style={{
+                fontSize: 10, padding: "2px 8px", borderRadius: 20,
+                background: "var(--surface2)", color: "var(--muted)", fontWeight: 600,
+              }}>{fmtModality(model.modality)}</span>
+            </div>
+            {fmtDate(model.createdAt) && (
+              <p style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>
+                Released {fmtDate(model.createdAt)}
+              </p>
+            )}
           </div>
           <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
             {isFree && (

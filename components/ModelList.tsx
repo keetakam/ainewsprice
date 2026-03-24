@@ -7,7 +7,7 @@ import ModelCard from "./ModelCard";
 import ModelDetailModal from "./ModelDetailModal";
 import { useCompareIds } from "./useCompareIds";
 
-type SortKey = "promptPrice" | "completionPrice" | "contextLength" | "name" | "tokensPerSec" | "intelligenceIndex";
+type SortKey = "promptPrice" | "completionPrice" | "contextLength" | "name" | "tokensPerSec" | "intelligenceIndex" | "createdAt";
 
 const PROVIDERS_ALL = "All";
 
@@ -74,7 +74,7 @@ export default function ModelList({ models }: { models: ModelPrice[] }) {
       if (idx !== -1) {
         // already active — toggle direction or remove if clicked again same direction
         const s = prev[idx];
-        const defaultAsc = key !== "intelligenceIndex";
+        const defaultAsc = key !== "intelligenceIndex" && key !== "createdAt";
         if (s.asc === defaultAsc) {
           // flip direction
           return prev.map((s, i) => i === idx ? { ...s, asc: !s.asc } : s);
@@ -84,7 +84,7 @@ export default function ModelList({ models }: { models: ModelPrice[] }) {
         }
       }
       // add new sort as primary (front)
-      return [{ key, asc: key !== "intelligenceIndex" }, ...prev];
+      return [{ key, asc: key !== "intelligenceIndex" && key !== "createdAt" }, ...prev];
     });
   }
 
@@ -190,7 +190,7 @@ export default function ModelList({ models }: { models: ModelPrice[] }) {
       {/* Sort buttons */}
       <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
         <span style={{ fontSize: 12, color: "var(--muted)", alignSelf: "center" }}>Sort:</span>
-        {([["promptPrice", "Input price"], ["completionPrice", "Output price"], ["contextLength", "Context"], ["tokensPerSec", "Speed"], ["name", "Name"], ["intelligenceIndex", "Intelligence"]] as [SortKey, string][]).map(([key, label]) => {
+        {([["promptPrice", "Input price"], ["completionPrice", "Output price"], ["contextLength", "Context"], ["tokensPerSec", "Speed"], ["name", "Name"], ["intelligenceIndex", "Intelligence"], ["createdAt", "Release date"]] as [SortKey, string][]).map(([key, label]) => {
           const s = sorts.find(s => s.key === key);
           const idx = sorts.findIndex(s => s.key === key);
           return (

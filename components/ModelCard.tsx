@@ -14,6 +14,13 @@ function fmtCtx(n: number) {
   return String(n);
 }
 
+function modalityLabel(m: string): { label: string; icon: string } {
+  if (m.includes("image->text") || m.includes("+image->")) return { label: "Vision", icon: "👁" };
+  if (m.includes("->image") || m.includes("->text+image")) return { label: "Image Gen", icon: "🖼" };
+  if (m.includes("audio")) return { label: "Audio", icon: "🔊" };
+  return { label: "Text", icon: "T" };
+}
+
 function intelligenceRank(score: number): { label: string; bg: string; color: string } {
   if (score >= 50) return { label: "A+", bg: "#4c1d95", color: "#c4b5fd" };
   if (score >= 35) return { label: "A",  bg: "#1e3a5f", color: "#93c5fd" };
@@ -63,9 +70,22 @@ export default function ModelCard({ model, onAdd, isAdded, removeMode, onClick }
               );
             })()}
           </p>
-          <p style={{ fontSize: 11, color: "var(--accent)", marginTop: 2, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-            {model.provider}
-          </p>
+          <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 2, flexWrap: "wrap" }}>
+            <p style={{ fontSize: 11, color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              {model.provider}
+            </p>
+            {(() => {
+              const { label, icon } = modalityLabel(model.modality);
+              return (
+                <span title={model.modality} style={{
+                  fontSize: 10, padding: "1px 6px", borderRadius: 20,
+                  background: "var(--surface2)", color: "var(--muted)", fontWeight: 500,
+                }}>
+                  {icon} {label}
+                </span>
+              );
+            })()}
+          </div>
         </div>
         <div style={{ display: "flex", gap: 4, alignItems: "center", flexShrink: 0 }}>
           {model.promptPrice === 0 && model.completionPrice === 0 && (
@@ -84,7 +104,6 @@ export default function ModelCard({ model, onAdd, isAdded, removeMode, onClick }
       {onAdd && (
         <button
           onClick={e => { e.stopPropagation(); onAdd(); }}
-          disabled={isAdded && !removeMode}
           style={{
             alignSelf: "flex-start",
             padding: "3px 10px",
@@ -96,8 +115,24 @@ export default function ModelCard({ model, onAdd, isAdded, removeMode, onClick }
             fontWeight: 500,
             cursor: "pointer",
           }}
+          onMouseEnter={e => {
+            if (isAdded && !removeMode) {
+              (e.currentTarget as HTMLButtonElement).textContent = "− Remove";
+              (e.currentTarget as HTMLButtonElement).style.background = "transparent";
+              (e.currentTarget as HTMLButtonElement).style.border = "1px solid #ef4444";
+              (e.currentTarget as HTMLButtonElement).style.color = "#ef4444";
+            }
+          }}
+          onMouseLeave={e => {
+            if (isAdded && !removeMode) {
+              (e.currentTarget as HTMLButtonElement).textContent = "✓ Added";
+              (e.currentTarget as HTMLButtonElement).style.background = "var(--accent)";
+              (e.currentTarget as HTMLButtonElement).style.border = "1px solid var(--accent)";
+              (e.currentTarget as HTMLButtonElement).style.color = "#fff";
+            }
+          }}
         >
-          {removeMode ? "− Remove" : isAdded ? "Added" : "+ Add to Compare"}
+          {removeMode ? "− Remove" : isAdded ? "✓ Added" : "+ Add to Compare"}
         </button>
       )}
 
