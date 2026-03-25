@@ -7,14 +7,14 @@ import ModelCard from "./ModelCard";
 import ModelDetailModal from "./ModelDetailModal";
 import { useCompareIds } from "./useCompareIds";
 
-type SortKey = "promptPrice" | "completionPrice" | "contextLength" | "name" | "tokensPerSec" | "intelligenceIndex" | "createdAt";
+type SortKey = "promptPrice" | "completionPrice" | "totalPrice" | "contextLength" | "name" | "tokensPerSec" | "intelligenceIndex" | "createdAt";
 
 const PROVIDERS_ALL = "All";
 
 export default function ModelList({ models }: { models: ModelPrice[] }) {
   const [search, setSearch] = useState("");
   const [provider, setProvider] = useState(PROVIDERS_ALL);
-  const [sorts, setSorts] = useState<{ key: SortKey; asc: boolean }[]>([{ key: "promptPrice", asc: true }]);
+  const [sorts, setSorts] = useState<{ key: SortKey; asc: boolean }[]>([{ key: "totalPrice", asc: true }]);
   const [priceFilter, setPriceFilter] = useState<"all" | "free" | "paid">("all");
   const [modalityFilter, setModalityFilter] = useState<"all" | "text" | "vision" | "audio">("all");
   const [newOnly, setNewOnly] = useState(false);
@@ -190,7 +190,7 @@ export default function ModelList({ models }: { models: ModelPrice[] }) {
       {/* Sort buttons */}
       <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
         <span style={{ fontSize: 12, color: "var(--muted)", alignSelf: "center" }}>Sort:</span>
-        {([["promptPrice", "Input price"], ["completionPrice", "Output price"], ["contextLength", "Context"], ["tokensPerSec", "Speed"], ["name", "Name"], ["intelligenceIndex", "Intelligence"], ["createdAt", "Release date"]] as [SortKey, string][]).map(([key, label]) => {
+        {([["totalPrice", "Total price"], ["promptPrice", "Input price"], ["completionPrice", "Output price"], ["contextLength", "Context"], ["tokensPerSec", "Speed"], ["name", "Name"], ["intelligenceIndex", "Intelligence"], ["createdAt", "Release date"]] as [SortKey, string][]).map(([key, label]) => {
           const s = sorts.find(s => s.key === key);
           const idx = sorts.findIndex(s => s.key === key);
           return (

@@ -150,6 +150,13 @@ export default function ModelCard({ model, onAdd, isAdded, removeMode, onClick }
             {fmt(model.completionPrice)}
           </p>
         </div>
+        <div style={{ width: 1, background: "var(--border)", alignSelf: "stretch" }} />
+        <div>
+          <p style={{ fontSize: 10, color: "var(--muted)", marginBottom: 2 }}>TOTAL / 1M</p>
+          <p style={{ fontWeight: 700, color: model.totalPrice === 0 ? "var(--green)" : "var(--accent)" }}>
+            {fmt(model.totalPrice)}
+          </p>
+        </div>
         <div style={{ marginLeft: "auto" }}>
           {model.createdAt && (() => {
             const d = new Date(model.createdAt * 1000);

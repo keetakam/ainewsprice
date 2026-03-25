@@ -14,6 +14,7 @@ export interface ModelPrice {
   tokensPerSec: number | null;
   timeToFirstToken: number | null;
   intelligenceIndex: number | null;
+  totalPrice: number;
 }
 
 interface OpenRouterModel {
@@ -64,7 +65,8 @@ export async function fetchPrices(): Promise<ModelPrice[]> {
         tokensPerSec: perf?.tokensPerSec ?? null,
         timeToFirstToken: perf?.timeToFirstToken ?? null,
         intelligenceIndex: perf?.intelligenceIndex ?? null,
+        totalPrice: parseFloat(m.pricing.prompt) * 1_000_000 + parseFloat(m.pricing.completion) * 1_000_000,
       };
     })
-    .sort((a, b) => a.promptPrice - b.promptPrice);
+    .sort((a, b) => (a.promptPrice + a.completionPrice) - (b.promptPrice + b.completionPrice));
 }
